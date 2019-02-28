@@ -40,7 +40,7 @@ Data for upcoming 5 matches were created manually to test the models.
                 6. Data set had records per innings for each match. We converted the data into records per match. Now each reords will contain match reord for both the innings along common matrcies like Match.City,Venue,Date,Winner,Team1,Team2,Winner,Toss Winner,Toss Decision.
 
 ## 2.2 Exploratory Data Analysis
-   i.Univariate EDA was performed to analyze different independent variables.Few insights from the categorical data are as follows.
+   i.Univariate EDA was performed to analyze different independent variables.Few insights from the categorical data are as follows:
    1. Analysis shows that Australia got highest number of wins at ODI match when played at Sydney whereas India got highest number of    wins at ODI match when played at Nagpur
    2. Both the countries got their highest winning when they decided to bat first in the Toss Decision.
    3. Australia has higher tendency to win the match when it wins the Toss compared to India.
