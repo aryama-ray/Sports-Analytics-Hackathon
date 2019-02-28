@@ -9,6 +9,9 @@ Data has been collected from the following links:
 -> https://cricsheet.org/
 -> http://stats.espncricinfo.com/ci/engine/stats/index.html
 
+Input File : odi_summary_v1.csv -> Train Dataset
+             ODI_summary_test.csv -> Test Data set
+
 Data from cricksheet has been collected in XAML format and converted into .csv format by using Python.
 Data for upcoming 5 matches were created manually to test the models.
 
