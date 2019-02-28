@@ -4,7 +4,7 @@ Australia tour of India 2019 will commence from 24th February 2019. There will b
 As a part of this Hackathon we will consider only 5 ODIs which will be played by Australia and India.
 ODIs will commence on 2nd March,2019 and will be held on different cities in India.
 
-#1. Data Collection
+# 1. Data Collection
 Data has been collected from the following links:            
 -> https://cricsheet.org/
 -> http://stats.espncricinfo.com/ci/engine/stats/index.html
@@ -20,11 +20,11 @@ Data for upcoming 5 matches were created manually to test the models.
   2.Batting summary - consists of batting records for each player
   3.Bowling summary - consists of bowling stats per bowlers
 
-#2. Problem Statement 1 and 2:
+# 2. Problem Statement 1 and 2:
 ##   1. Winner of the Series : Who will Win ODI series ? India or Australia!
 ##   2. Series Output : What will be the winning margin? White wash or 60-40 or something else!
 
-##2.1 Data Set Preparation and Cleaning
+## 2.1 Data Set Preparation and Cleaning
    For the first two problem statements ODI summary data sheet was used. 
    Since this data includes all the matches from International One Day cricket, we filtered the data set for India and Australia Men's 
    matches.
@@ -39,7 +39,7 @@ Data for upcoming 5 matches were created manually to test the models.
                 5.Some redundant fields were removed - Man of the Match- as it is being decided after match result.Gender - since we are considering Mens' ODI only,Oversplayed - as it is supposed to be 50 by ODI rule.Match Type - as it is always ODI for our analysis.
                 6. Data set had records per innings for each match. We converted the data into records per match. Now each reords will contain match reord for both the innings along common matrcies like Match.City,Venue,Date,Winner,Team1,Team2,Winner,Toss Winner,Toss Decision.
 
-##2.2 Exploratory Data Analysis
+## 2.2 Exploratory Data Analysis
    i.Univariate EDA was performed to analyze different independent variables.Few insights from the categorical data are as follows.
    1. Analysis shows that Australia got highest number of wins at ODI match when played at Sydney whereas India got highest number of    wins at ODI match when played at Nagpur
    2. Both the countries got their highest winning when they decided to bat first in the Toss Decision.
@@ -63,7 +63,7 @@ There were two data row with  NA values were found while doing summary on the da
   6. India  has highest sixers in second innings against Australia.
   7. Australia lost highest agerage number of Wickets on second innings against India.
 
-##2.3 Modeling Approach
+## 2.3 Modeling Approach
   1. Factorized target variable.We have considered value 1 when India is Winner and 0 when Australia s winner.
   2. Created dummy variables from factor variables having 2 or more number of levels.
   3. Splitted data set into train and test(for model validation).
