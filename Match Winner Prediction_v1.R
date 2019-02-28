@@ -10,11 +10,14 @@
 ###########################################################################################################################
 #
 #----------------------- Business Understanding--------------------------------------------------------------------------##
+# Problem Statement 1 and 2:
+##   1. Winner of the Series : Who will Win ODI series ? India or Australia!
+##   2. Series Output : What will be the winning margin? White wash or 60-40!
 ##########################################################################################################################
 #------------------------------------------------------------------------------------------------------------------------#
 # SET UP WORK DIRECTORY
 #-------------------------------------------------------------------------------------------------------------------------#
-
+#setwd("H:/PG Diploma IN Data Science IIITB/Cricket Challenge/Data Preparation/DataSet")
 #-------------------------------------------------------------------------------------------------------------------------#
 # INSTALL PACKAGES AND LOAD REQUIRED LIBRARIES
 #-------------------------------------------------------------------------------------------------------------------------# 
@@ -32,7 +35,6 @@ library(e1071)
 library(caret)
 library(caTools)
 library(ROCR)
-
 library(lubridate)
 library(dplyr)
 library(ggplot2)
@@ -44,9 +46,10 @@ require(graphics)
 #-------------------------------------------------------------------------------------------------------------------------#
 #**********************DATA SOURCING**************************************************************************************#
 #-------------------------------------------------------------------------------------------------------------------------#
-
+#Input dataset
 odi_summary <- read.csv("odi_summary_v2.csv",stringsAsFactors = F)
 
+#Test data set for final prediction
 odi_summary_test <- read.csv("ODI_summary_test.csv",stringsAsFactors = F)
 #------------------------------------------------------------------------------------------------------------------------#
 # *********************DATA UNDERSTANDING AND PREPARATION****************************************************************#
@@ -56,53 +59,23 @@ str(odi_summary) #3005 obs. of  20 variables
 
 length(unique(odi_summary$fid)) # 1522 unique
 
-#odi_summary$Venue.Ground <- as.factor(odi_summary$Venue.Ground)
+#We will format Date fields
+
 odi_summary$Date <- as.Date(odi_summary$Date,"%d-%m-%y")
-
-odi_summary$Match.Type <- as.factor(odi_summary$Match.Type)
-odi_summary$Gender <- as.factor(odi_summary$Gender)
-odi_summary$Team1 <- as.factor(odi_summary$Team1)
-odi_summary$Team2 <- as.factor(odi_summary$Team2)
-
-
 
 # We will predict Aus-India ODI matches for Male palyers 
 # Hence we will first filter out our data set 
 
-#odi_summary_IND_AUS <- subset(odi_summary,Match.Type = 'ODI' & Gender = 'male' & Team1 = ("India" | "Australia") & Team2 = ("India" | "Australia"),select = c(Match.Type,Gender,Team1,Team2))
-odi_summary_IND_AUS <- odi_summary %>% filter(Match.Type == 'ODI' & Gender == 'male')
-odi_summary_IND_AUS <- odi_summary_IND_AUS %>% filter((Team1 == 'India' | Team1 == "Australia") & (Team2 == 'India' | Team2 == "Australia"))
+odi_summary_IND_AUS <- odi_summary %>% subset(Match.Type == 'ODI' & Gender == 'male' & (Team1 == 'India' | Team1 == "Australia") & (Team2 == 'India' | Team2 == "Australia"))
 
 #There are few match city which are blank. Let compute them basedon match ground location
 odi_summary_IND_AUS$Match.City[odi_summary_IND_AUS$Venue.Ground == "Sydney Cricket Ground"] <- 'Sydney'
 odi_summary_IND_AUS$Match.City[odi_summary_IND_AUS$Venue.Ground == "Melbourne Cricket Ground"] <- 'Melbourne'
 odi_summary_IND_AUS$Match.City[odi_summary_IND_AUS$Venue.Ground == "Adelaide Oval"] <- 'Adelaide'
 
-#Lets factorise  other variables
-str(odi_summary_IND_AUS)
-#levels(odi_summary_IND_AUS$Team1) <- c("India","Australia")
-
-#There are few blank for Winner col .Hence mathches remain undecided or draw in those cases
-sum(odi_summary_IND_AUS$Winner=='')
-#Hence there are 10 records withblank winner column. Let us impute them as 'draw'
-odi_summary_IND_AUS$Winner[odi_summary_IND_AUS$Winner==''] <- 'Draw'
-
-
-#There are few redundant columns - Match.type, Gender,Overs.played=50 for all
-#We will filter them out
-odi_summary_IND_AUS <- odi_summary_IND_AUS[,!colnames(odi_summary_IND_AUS)  %in% c('Match.Type','Gender','Overs.Played')]
-
-#Replace all Remaining blank with NA
-odi_summary_IND_AUS$Venue.Ground[which(odi_summary_IND_AUS$Venue.Ground=='')] <- NA
-odi_summary_IND_AUS$MoM[which(odi_summary_IND_AUS$MoM =='')] <- NA
-odi_summary_IND_AUS$Toss.Decision[which(odi_summary_IND_AUS$Toss.Decision =='')] <- NA
-odi_summary_IND_AUS$Toss.Winner[which(odi_summary_IND_AUS$Toss.Winner =='')] <- NA
-odi_summary_IND_AUS$Toss.Winner[which(odi_summary_IND_AUS$Toss.Winner =='')] <- NA
-odi_summary_IND_AUS$Innings[which(odi_summary_IND_AUS$Innings == '')] <- NA
-odi_summary_IND_AUS$Batting.Team [which(odi_summary_IND_AUS$Batting.Team == '')] <- NA
-
 #Let us  check unique citys
 unique(odi_summary_IND_AUS$Match.City)
+
 #There are total 22 cities where these matches were played.
 #based on winning team in the match ad the city they played we will segregate the match as away or home.
 #From the dataset, we observed that there are 2 cities, kula lumpur and centurion which are not home to either team.
@@ -132,19 +105,48 @@ Australia.City <- c("Adelaide",
 
 Other.City <- c("Kuala Lumpur", 
                 "Centurion")
+
 odi_summary_IND_AUS$Winners.Ground <- ifelse((odi_summary_IND_AUS$Winner=="India" & odi_summary_IND_AUS$Match.City %in% India.City),'Home',
-                                              ifelse(odi_summary_IND_AUS$Winner=="Australia" & odi_summary_IND_AUS$Match.City %in% Australia.City,'Home','Away'))
+                                             ifelse(odi_summary_IND_AUS$Winner=="Australia" & odi_summary_IND_AUS$Match.City %in% Australia.City,'Home','Away'))
+#Let us check all venue grounds
+levels(as.factor(odi_summary_IND_AUS$Venue.Ground))
+#There are two  grounds with similar name : "Vidarbha Cricket Association Stadium, Jamtha" and "Vidarbha Cricket Association Ground"
+#Let us correct them to Vidarbha Cricket Association Ground
+
+odi_summary_IND_AUS$Venue.Ground[odi_summary_IND_AUS$Venue.Ground == "Vidarbha Cricket Association Stadium, Jamtha"] <- "Vidarbha Cricket Association Ground"
+
+
+#There are few blank for Winner col .Hence mathches remain undecided or draw in those cases
+sum(odi_summary_IND_AUS$Winner=='')
+
+#Hence there are 10 records withblank winner column. Let us impute them as 'draw'
+odi_summary_IND_AUS$Winner[odi_summary_IND_AUS$Winner==''] <- 'Draw'
+
+
+#Replace all following  blanks with NA
+odi_summary_IND_AUS$Venue.Ground[which(odi_summary_IND_AUS$Venue.Ground=='')] <- NA
+odi_summary_IND_AUS$MoM[which(odi_summary_IND_AUS$MoM =='')] <- NA
+odi_summary_IND_AUS$Toss.Decision[which(odi_summary_IND_AUS$Toss.Decision =='')] <- NA
+odi_summary_IND_AUS$Toss.Winner[which(odi_summary_IND_AUS$Toss.Winner =='')] <- NA
+odi_summary_IND_AUS$Innings[which(odi_summary_IND_AUS$Innings == '')] <- NA
+odi_summary_IND_AUS$Batting.Team [which(odi_summary_IND_AUS$Batting.Team == '')] <- NA
+
+#There are few redundant columns - Match.type, Gender,Overs.played=50 for all
+#We will filter them out
+odi_summary_IND_AUS <- odi_summary_IND_AUS[,!colnames(odi_summary_IND_AUS)  %in% c('Match.Type','Gender','Overs.Played','MoM')]
 
 #Converting all the character variable into factor
 
-all_char <- c('Match.City','Venue.Ground','Winner','MoM','Toss.Decision','Toss.Winner','Innings','Batting.Team','Winners.Ground')
 
-#
-summary(odi_summary_IND_AUS)
+str(odi_summary_IND_AUS)
+#Lets factorise  all the character variables
+all_char <- c('Match.City','Venue.Ground','Team1', 'Team2','Winner','Toss.Decision','Toss.Winner','Innings','Batting.Team','Winners.Ground')
 
 odi_summary_IND_AUS[,all_char] <- lapply(odi_summary_IND_AUS[,all_char], as.factor)
-odi_summary_IND_AUS[,all_char]
+#Let us look at the summary
+summary(odi_summary_IND_AUS)
 
+#Data now consist of records per innings for each match. We will convert the data into records per match 
 odi_summary_IND_AUS_1st_inn <- subset(odi_summary_IND_AUS,odi_summary_IND_AUS$Innings == '1st innings')
 odi_summary_IND_AUS_2nd_inn <- subset(odi_summary_IND_AUS,odi_summary_IND_AUS$Innings == '2nd innings')
 
@@ -178,14 +180,14 @@ colnames(odi_summary_IND_AUS_all_inn)
 
 #There are few redundaant columns.We will remove them
 redundant_col <- c("First_innings_Innings","Second_innings_Match.City","Second_innings_Venue.Ground","Second_innings_Date",          
-"Second_innings_Team1","Second_innings_Team2","Second_innings_Winner","Second_innings_MoM","Second_innings_Toss.Decision","Second_innings_Toss.Winner","Second_innings_Innings",
+"Second_innings_Team1","Second_innings_Team2","Second_innings_Winner","Second_innings_Toss.Decision","Second_innings_Toss.Winner","Second_innings_Innings",
 "Second_innings_Winners.Ground")
 
 odi_summary_IND_AUS_all_inn <- odi_summary_IND_AUS_all_inn[,!colnames(odi_summary_IND_AUS_all_inn) %in% redundant_col ]
 
 #Few colnames are misleading,hence we will change them.
 common_col <- c("fid","Match.City","Venue.Ground","Date", "Team1","Team2",         
-                "Winner","MoM","Toss.Decision","Toss.Winner")
+                "Winner","Toss.Decision","Toss.Winner")
 
 
 colnames(odi_summary_IND_AUS_all_inn) <- c(common_col,"First_innings_Batting.Team",   
@@ -202,25 +204,47 @@ colnames(odi_summary_IND_AUS_all_inn) <- c(common_col,"First_innings_Batting.Tea
                                            "Second_innings_Total.Wickets",
                                            "Second_innings_Total.Balls")
 
+length(odi_summary_IND_AUS_all_inn$fid)
+#total 49 matches were played
+
+max(year(odi_summary_IND_AUS_all_inn$Date)) #We have data till 2018
+min(year(odi_summary_IND_AUS_all_inn$Date)) #Wehave data from 2006
+
+sum(odi_summary_IND_AUS_all_inn$Winner=="India") # 20 times India won
+sum(odi_summary_IND_AUS_all_inn$Winner=="Australia") #25 times Australia won
+
+
+# Exploratory Data Analysis ########################################################################################
+
+str(odi_summary_IND_AUS_all_inn)
 
 # Barchart for categorical variables.
-
-
 cat_bar<- theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), 
                 legend.position = 'right')
 
 
-plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Match.City,fill=as.factor(Winner)))+geom_bar(position='dodge')+cat_bar,
-          ggplot(odi_summary_IND_AUS_all_inn, aes(Toss.Decision,fill=as.factor(Winner)))+geom_bar(position='dodge')+cat_bar)
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Match.City,fill=as.factor(Winner)))+geom_bar(position='dodge')+labs(title = 'Match.City wise Analysis', y = "Match Count", x = "Match City")+cat_bar,
+          ggplot(odi_summary_IND_AUS_all_inn, aes(Toss.Decision,fill=as.factor(Winner)))+geom_bar(position='dodge')+labs(title = 'Toss.Decision wise Analysis', y = "Match Count", x = "Toss.Decision")+cat_bar)
 
-ggplot(odi_summary_IND_AUS_all_inn,aes(x=factor(Winner))) + geom_bar() + facet_wrap(~Venue.Ground) + labs(x="Status", y="Number of Requests", title = "India Australia Match")
+# Analysis shows that Australia got highest number of wins at ODI match when played at Sydney
+# whereas India got highest number of wins at ODI match when played at Nagpur
+# Both the countries got their highest winning when they decided to bat first in the Toss Decision.
 
-plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Toss.Winner,fill=as.factor(Winner)))+geom_bar(position='dodge')+cat_bar,
-          ggplot(odi_summary_IND_AUS_all_inn, aes(First_innings_Batting.Team,fill=as.factor(Winner)))+geom_bar(position='dodge')+cat_bar,
-          ggplot(odi_summary_IND_AUS_all_inn, aes(Winners.Ground,fill=as.factor(Winner)))+geom_bar(position='dodge')+cat_bar)      
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Toss.Winner,fill=as.factor(Winner)))+geom_bar(position='dodge')+labs(title = 'Toss Winner wise Analysis', y = "Match Count", x = "Toss Winner")+cat_bar,
+          ggplot(odi_summary_IND_AUS_all_inn, aes(First_innings_Batting.Team,fill=as.factor(Winner)))+geom_bar(position='dodge')+labs(title = 'First_innings_Batting.Team wise Analysis', y = "Match Count", x = "First_innings_Batting.Team")+cat_bar,
+          ggplot(odi_summary_IND_AUS_all_inn, aes(Winners.Ground,fill=as.factor(Winner)))+geom_bar(position='dodge')+labs(title = "Winner ground wise Analysis", y = "Match Count", x = "Winners Ground")+cat_bar)      
 
 
-#
+#Australia has higher tendency to win the match when it wins the Toss compared to India.
+#Playing at Home ground or Away does not have much effect on the Winning
+#Australia has highest winnings when it has batted in the first innings.
+
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Venue.Ground,fill=as.factor(Winner)))+geom_bar(position='dodge')+labs(title = 'Venue.Ground wise Analysis', y = "Match Count", x = "Venue.Ground")+cat_bar,
+          ggplot(odi_summary_IND_AUS_all_inn, aes(Second_innings_Batting.Team,fill=as.factor(Winner)))+geom_bar(position='dodge')+labs(title = 'Second_innings_Batting.Team wise Analysis', y = "Match Count", x = "Second_innings_Batting.Team")+cat_bar)
+
+#Australia has low winning count when it batted on second innings.But compared to first innings,India has got better winning count when it batted on second innings.
+#India has highest winning against Australia at Vidarbha Cricket Association ground and Australia has highest winning against India at Sydney Cricket ground.
+
 summary(odi_summary_IND_AUS_all_inn)
 #There are 2 NA values for 2nd Innings data , probably the match didn't end due to some circumstances.
 #Let us check those records
@@ -236,18 +260,63 @@ odi_summary_IND_AUS_all_inn <- odi_summary_IND_AUS_all_inn %>% mutate(First_inni
 #Second Innings
 odi_summary_IND_AUS_all_inn <- odi_summary_IND_AUS_all_inn %>% mutate(Second_innings_RunRate_perball = Second_innings_Total.Runs/Second_innings_Total.Balls)
 
-#Let us visualize winner plot for continuous variables
+#Let us visualize and analyse for continuous variables
 
 num_box <- theme(axis.line=element_blank(),axis.title=element_blank(), 
                  axis.ticks=element_blank(), axis.text=element_blank())
 
 plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(First_innings_Total.Runs,fill=as.factor(Winner)))+ geom_bar(),
-          ggplot(odi_summary_IND_AUS_all_inn, aes(x=as.factor(First_innings_Batting.Team),y=First_innings_Total.Runs))+ geom_boxplot(width=0.1)+num_box, 
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=First_innings_Total.Runs))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+#Australia overall has highest average Runs in First innings against India, though it has lowest runs as well
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(First_innings_Total.6s,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=First_innings_Total.6s))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+#India has lowest average of number sixers in first innings, though it has a highest number of sixer against Australia. 
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(First_innings_Total.4s,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=First_innings_Total.4s))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+#India has highest as lowest numbers of 4's against Australia in a match.
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(First_innings_Total.Wickets,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=First_innings_Total.Wickets))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+#Australia has highest average wickets on first innings against India
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(First_innings_Total.Balls,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=First_innings_Total.Balls))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(First_innings_RunRate_perball,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=First_innings_RunRate_perball))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+#First Innings Average Runrate is slight high for Australia against india.
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Second_innings_Total.Runs,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=Second_innings_Total.Runs))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Second_innings_Total.6s,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=Second_innings_Total.6s))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+#India has highest sixers in second innings against Australia.
+
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Second_innings_Total.4s,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=Second_innings_Total.4s))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Second_innings_Total.Wickets,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=Second_innings_Total.Wickets))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+#Australia lost highest agerage number of Wickets on second innings against India.
+
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Second_innings_Total.Balls,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=Second_innings_Total.Balls))+ geom_boxplot(width=0.1), 
+          align = "h",ncol = 1)
+
+plot_grid(ggplot(odi_summary_IND_AUS_all_inn, aes(Second_innings_RunRate_perball,fill=as.factor(Winner)))+ geom_bar(),
+          ggplot(odi_summary_IND_AUS_all_inn, aes(x=Winner,y=Second_innings_RunRate_perball))+ geom_boxplot(width=0.1)+num_box, 
           align = "h",ncol = 1)
 
 #Analysis per match date
-ggplot(odi_summary_IND_AUS_all_inn,aes(x=factor(Winner))) + geom_bar() + facet_wrap(~Date) 
-ggplot(odi_summary_IND_AUS_all_inn,aes(x=year(Date),fill=Winner))+geom_bar()
+ggplot(odi_summary_IND_AUS_all_inn,aes(x=factor(Winner),fill='green')) + geom_bar() + facet_wrap(~Date) + labs(x="Match Winner", y="Number of Match", title = "India Australia Match Outcome")
 
 
 ##
@@ -260,17 +329,7 @@ corr_odi_data <- cor(odi_summary_IND_AUS_all_inn[,c("First_innings_Total.Runs","
                                                     "Second_innings_Total.Balls","First_innings_RunRate_perball","Second_innings_RunRate_perball")])
 summary(odi_summary_IND_AUS_all_inn)
 
-length(odi_summary_IND_AUS_all_inn$fid)
-#total 45 matches were played
 
-max(year(odi_summary_IND_AUS_all_inn$Date)) #We have data till 2018
-min(year(odi_summary_IND_AUS_all_inn$Date)) #Wehave data from 2006
-
-sum(odi_summary_IND_AUS_all_inn$Winner=="India") # 20 times India won
-sum(odi_summary_IND_AUS_all_inn$Winner=="Australia") #25 times Australia won
-
-
-##Do not run
 # We convert target variable - Attrition from char to factorwith levels 0/1 
 odi_summary_IND_AUS_all_inn$Winner <- ifelse(odi_summary_IND_AUS_all_inn$Winner =="India",1,0)
 
@@ -334,72 +393,76 @@ summary(model_2_odi)
 
 vif(model_2_odi)
 
-#Removed Date
-model_3_odi = glm(Winner ~ Date + First_innings_Total.6s + Second_innings_Total.6s + 
-                    Second_innings_Total.Wickets + Venue.Ground.xMA.Chidambaram.Stadium..Chepauk + 
+#Removed Venue.Ground.xSardar.Patel.Stadium..Motera 
+model_3_odi = glm(Winner ~ Date + First_innings_Total.6s + Second_innings_Total.Runs + 
+                    Second_innings_Total.6s + Venue.Ground.xMA.Chidambaram.Stadium..Chepauk + 
                     Venue.Ground.xPunjab.Cricket.Association.Stadium..Mohali + 
-                    Venue.Ground.xReliance.Stadium + Toss.Decision,data = train_data,family = 'binomial')
+                    Venue.Ground.xReliance.Stadium +  
+                    Venue.Ground.xVidarbha.Cricket.Association.Ground,data = train_data,family = 'binomial')
 
 summary(model_3_odi)
 vif(model_3_odi)
 
-#First_innings_Total.6s has high vif and p value >>0.05
+#Venue.Ground.xPunjab.Cricket.Association.Stadium..Mohali has high  p value >>0.05
 
-model_4_odi = glm(Winner ~ Date + Second_innings_Total.6s + 
-                    Second_innings_Total.Wickets + Venue.Ground.xMA.Chidambaram.Stadium..Chepauk + 
-                    Venue.Ground.xPunjab.Cricket.Association.Stadium..Mohali + 
-                    Venue.Ground.xReliance.Stadium + Toss.Decision,data = train_data,family = 'binomial')
+model_4_odi = glm(Winner ~ Date + First_innings_Total.6s + Second_innings_Total.Runs + 
+                    Second_innings_Total.6s + Venue.Ground.xMA.Chidambaram.Stadium..Chepauk + 
+                    Venue.Ground.xReliance.Stadium +  
+                    Venue.Ground.xVidarbha.Cricket.Association.Ground,data = train_data,family = 'binomial')
 
 summary(model_4_odi)
 vif(model_4_odi)
 
 #Venue.Ground.xMA.Chidambaram.Stadium..Chepauk has p val >> 0.05
 
-model_5_odi = glm(Winner ~ Date + Second_innings_Total.6s + 
-                    Second_innings_Total.Wickets +  
-                    Venue.Ground.xPunjab.Cricket.Association.Stadium..Mohali + 
-                    Venue.Ground.xReliance.Stadium + Toss.Decision,data = train_data,family = 'binomial')
+model_5_odi = glm(Winner ~ Date + First_innings_Total.6s + Second_innings_Total.Runs + 
+                    Second_innings_Total.6s + 
+                    Venue.Ground.xReliance.Stadium +  
+                    Venue.Ground.xVidarbha.Cricket.Association.Ground,data = train_data,family = 'binomial')
 
 summary(model_5_odi)
 vif(model_5_odi)
-#removing Venue.Ground.xReliance.Stadium asit has pval>>0.05
+#removing VVenue.Ground.xReliance.Stadium  asit has pval>>0.05
 
-model_6_odi = glm(Winner ~ Date + Second_innings_Total.6s + 
-                    Second_innings_Total.Wickets +  
-                    Venue.Ground.xPunjab.Cricket.Association.Stadium..Mohali + 
-                    Toss.Decision,data = train_data,family = 'binomial')
+model_6_odi = glm(Winner ~  Date + First_innings_Total.6s + Second_innings_Total.Runs + 
+                    Second_innings_Total.6s + 
+                    Venue.Ground.xVidarbha.Cricket.Association.Ground,data = train_data,family = 'binomial')
 
 summary(model_6_odi)
+vif(model_6_odi)
 
 
-#removing Venue.Ground.xPunjab.Cricket.Association.Stadium..Mohali
+#removing Venue.Ground.xVidarbha.Cricket.Association.Ground
 
-model_7_odi = glm(Winner ~ Date + Second_innings_Total.6s + 
-                    Second_innings_Total.Wickets +  
-                    Toss.Decision,data = train_data,family = 'binomial')
+model_7_odi = glm(Winner ~ Date + First_innings_Total.6s + Second_innings_Total.Runs + 
+                    Second_innings_Total.6s,
+                    data = train_data,family = 'binomial')
 
 summary(model_7_odi)
+vif(model_7_odi)
 
-#Removing Date
+#Removing Date as it has high  p value
 
-model_8_odi = glm(Winner ~ Second_innings_Total.6s + 
-                    Second_innings_Total.Wickets +  
-                    Toss.Decision,data = train_data,family = 'binomial')
+model_8_odi = glm(Winner ~ First_innings_Total.6s + Second_innings_Total.Runs + 
+                    Second_innings_Total.6s,data = train_data,family = 'binomial')
 
 
 summary(model_8_odi)
+vif(model_8_odi)
 
-model_9_odi = glm(Winner ~ Second_innings_Total.Wickets +  
-                    Toss.Decision,data = train_data,family = 'binomial')
+model_9_odi = glm(Winner ~ Second_innings_Total.Runs + 
+                    Second_innings_Total.6s,data = train_data,family = 'binomial')
 
 
 summary(model_9_odi)
+vif(model_9_odi)
 
-model_10_odi = glm(Winner ~ Second_innings_Total.Wickets,data = train_data,family = 'binomial')
+model_10_odi = glm(Winner ~ Second_innings_Total.Runs, 
+                    data = train_data,family = 'binomial')
 
 
 summary(model_10_odi)
-
+#Hence Second_innings_Total.Runs is  only the predictor variable.
 #----------------------------------------------------------------------------------------------------------------------------##
 # MODEL TESTING AND VALIDATION
 #----------------------------------------------------------------------------------------------------------------------------##
@@ -452,21 +515,21 @@ box()
 legend(-0.1,.001,col=c(2,"yellow",4,"darkred"),lwd=c(2,2,2,2),c("Sensitivity","Specificity","Accuracy"))
 
 #cutoff_prob_value <- seq_initiation[which(abs(out_dataset[,1]-out_dataset[,2]) < 0.09)][1]
-cutoff_prob_value <- seq_initiation[which(abs(out_dataset[,1]-out_dataset[,2]) < 0.1)][1]
-cutoff_prob_value #0.2733333  #0.2094949
+cutoff_prob_value <- seq_initiation[which(abs(out_dataset[,1]-out_dataset[,2]) < 0.8)][1]
+cutoff_prob_value #0.3770707
 
-#So we choose cut off as 0.2733333 in the model
-odi_summary_IND_AUS_final_prediction <- factor(ifelse(odi_summary_IND_AUS_prediction >=0.2094949, "India", "Australia"))
+#So we choose cut off as 0.3770707 in the model
+odi_summary_IND_AUS_final_prediction <- factor(ifelse(odi_summary_IND_AUS_prediction >=0.3770707, "India", "Australia"))
 #Now  we need to check conf
 test_data_confusionmatrix <- confusionMatrix(odi_summary_IND_AUS_final_prediction, Actual_odi_summary_IND_AUS, positive = "India")
-#Sensitivity : 0.7143          
-#Specificity : 0.6667          
-#Pos Pred Value : 0.7143          
-#Neg Pred Value : 0.6667          
-#Prevalence : 0.5385          
-#Detection Rate : 0.3846          
-#Detection Prevalence : 0.5385          
-#Balanced Accuracy : 0.6905
+#Sensitivity : 1.0000          
+#Specificity : 0.2727         
+#Pos Pred Value : 0.2727          
+#Neg Pred Value :  1.0000          
+#Prevalence : 0.2143          
+#Detection Rate : 0.2143          
+#Detection Prevalence : 0.7857          
+#Balanced Accuracy : 0.6364
 
 ##---Calculation of KS  statistics  for the test dataset --------------------------------------------------------------------##
 
@@ -483,19 +546,12 @@ ks_table_odi_IND_AUS_test <- attr(odi_IND_AUS_performance_measures_test, "y.valu
   (attr(odi_IND_AUS_performance_measures_test, "x.values")[[1]])
 
 # Here we check the maximum KS  stat value
-max(ks_table_odi_IND_AUS_test) #KS Stat - > 0.3809524
+max(ks_table_odi_IND_AUS_test) #KS Stat - > 0.2727273
 
 
 test_data$Predicted_Winner <- odi_summary_IND_AUS_final_prediction
 #   
 #------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-#odi_summary_IND_AUS_all_inn$Australia_Won <- ifelse(odi_summary_IND_AUS_all_inn$Winner=='Australia',1,0)
-#odi_summary_IND_AUS_all_inn$India_Won <- ifelse(odi_summary_IND_AUS_all_inn$Winner=='India',1,0)
-#odi_summary_IND_AUS_all_inn_India <- odi_summary_IND_AUS_all_inn[,colnames(odi_summary_IND_AUS_all_inn) %in% c('Date','India_Won')]
-
 write.csv(odi_summary_IND_AUS_all_inn,"odi_summary_IND_AUS_all_inn.csv")
 ############################################################################################################################################
 
@@ -516,9 +572,6 @@ write.csv(odi_summary_IND_AUS_all_inn,"odi_summary_IND_AUS_all_inn.csv")
 
 
 #Let us analysis using Time series
-
-#odi_summary_IND_AUS_all_inn$Australia_Won <- ifelse(odi_summary_IND_AUS_all_inn$Winner=='Australia',1,0)
-#odi_summary_IND_AUS_all_inn$India_Won <- ifelse(odi_summary_IND_AUS_all_inn$Winner=='India',1,0)
 
 #a.We will take subset of odi_summary_IND_AUS_all_inn to forecast First_innings_Total.Runs
 odi_summary_IND_AUS_firstinn_tot.run <- odi_summary_IND_AUS_all_inn[,c('Date', 'First_innings_Total.Runs')]
@@ -1029,9 +1082,11 @@ summary(odi_summary_test_prediction)
 #We merge predicted value to test_data set
 odi_summary_test$Predicted_probality <- odi_summary_test_prediction
 
-#Now our calculated cutoff is 0.2094949
-odi_summary_test_final_prediction <- factor(ifelse(odi_summary_test_prediction >=0.2094949, "India", "Australia"))
+#Now our calculated cutoff is 0.3770707
+odi_summary_test_final_prediction <- factor(ifelse(odi_summary_test_prediction >=0.3770707, "India", "Australia"))
 
 odi_summary_test$Predicted_Winner <- odi_summary_test_final_prediction
 
 #Hence based on our Prediction India will Win in all the 5 matches provided India chooses to bat on second innings.!
+
+
